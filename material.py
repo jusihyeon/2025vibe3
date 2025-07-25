@@ -91,15 +91,24 @@ with tabs[1]:
     if uploaded_country:
         try:
             try:
-                df2 = pd.read_csv(uploaded_country, encoding="utf-8")
+                df2 = pd.read_csv(uploaded_country, encoding="utf-8", sep=None, engine="python")
             except UnicodeDecodeError:
-                df2 = pd.read_csv(uploaded_country, encoding="cp949")
+                df2 = pd.read_csv(uploaded_country, encoding="cp949", sep=None, engine="python")
 
-            if df2.empty or df2.shape[1] == 0:
-                st.warning("⚠️ 업로드된 파일에 유효한 데이터가 없습니다.")
+            df2 = df2.dropna(how='all')  # 모든 값이 NaN인 행 제거
+            df2.columns = df2.columns.str.strip()
+
+            # 필수 컬럼 확인
+            if '광종' not in df2.columns or '국가' not in df2.columns or '매장량' not in df2.columns:
+                st.warning("❗ 필요한 열(광종, 국가, 매장량)이 누락된 파일입니다.")
+                st.stop()
+
+            df2["매장량"] = pd.to_numeric(df2["매장량"].astype(str).str.replace(",", ""), errors="coerce")
+            df2 = df2.dropna(subset=["광종", "국가", "매장량"])
+
+            if df2.empty:
+                st.warning("⚠️ 업로드된 CSV 파일에 데이터가 없습니다. 행이 0개입니다.")
             else:
-                df2.columns = df2.columns.str.strip()
-                df2["매장량"] = pd.to_numeric(df2["매장량"].astype(str).str.replace(",", ""), errors="coerce")
                 st.subheader("📊 데이터 미리보기")
                 st.dataframe(df2)
 
