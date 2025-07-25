@@ -26,7 +26,7 @@ def geocode_nominatim(address):
 # -------------------------------
 # 🌐 Streamlit UI
 st.set_page_config(page_title="주소 기반 북마크 지도", page_icon="📍", layout="centered")
-st.title("📍 주소로 북마크 지도 만들기 (API 키 없이)")
+st.title("📍북마크 지도")
 
 # 세션 상태 초기화
 if "bookmarks" not in st.session_state:
