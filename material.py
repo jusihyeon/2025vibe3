@@ -15,15 +15,17 @@ if uploaded_file:
             df = pd.read_csv(uploaded_file, encoding="cp949")
         except UnicodeDecodeError:
             df = pd.read_csv(uploaded_file, encoding="utf-8")
-        
+
         # 열 이름과 문자열 컬럼의 공백 제거
         df.columns = df.columns.str.strip()
         for col in df.select_dtypes(include='object'):
             df[col] = df[col].astype(str).str.strip()
 
-        # 수치 컬럼 변환
-        df["상위5개국 매장량 합계"] = pd.to_numeric(df["상위5개국 매장량 합계"]
-                                                   .str.replace(",", ""), errors="coerce")
+        # 수치 컬럼 변환 (콤마 제거 후 숫자형으로 변환)
+        df["상위5개국 매장량 합계"] = pd.to_numeric(
+            df["상위5개국 매장량 합계"].astype(str).str.replace(",", ""),
+            errors="coerce"
+        )
 
         # 결측 단위 채우기
         df["단위"] = df["단위"].fillna("기타")
@@ -55,4 +57,3 @@ if uploaded_file:
         st.exception(e)
 else:
     st.info("⬆️ 좌측에서 CSV 파일을 업로드하세요.")
-
