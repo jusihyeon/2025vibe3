@@ -21,7 +21,7 @@ with tab1:
             df_total = pd.read_csv(uploaded_sum, encoding='cp949', engine='python')
 
             # 열 정리
-            df_total = df_total.drop(columns=[df_total.columns[1]])  # 총인구 열 제거
+            df_total = df_total.drop(columns=[df_total.columns[1]])  # 총인구수 열 제거
             df_total = df_total.rename(columns={df_total.columns[0]: "지역"})
 
             # 긴 형식으로 변환
@@ -53,16 +53,16 @@ with tab1:
 with tab2:
     if uploaded_mf:
         try:
-            # 파일 읽기 (깨진 줄 건너뜀)
+            # 파일 읽기 (깨진 줄 무시)
             df_mf = pd.read_csv(uploaded_mf, encoding="ISO-8859-1", engine="python", on_bad_lines='skip')
             df_mf = df_mf.rename(columns={df_mf.columns[0]: "지역"})
 
-            # 기준 열 찾기 (남자 인구 시작점)
-            mid_idx = df_mf.columns.get_loc("2025년06월_남_총인구수")
+            # 열 이름에서 '남_0세', '여_0세' 위치 자동 탐색
+            male_start_idx = next(i for i, col in enumerate(df_mf.columns) if "남_0세" in col)
+            female_start_idx = next(i for i, col in enumerate(df_mf.columns) if "여_0세" in col)
 
-            # 남자/여자 연령별 열 분리
-            male_cols = df_mf.columns[mid_idx + 1 : mid_idx + 103]
-            female_cols = df_mf.columns[mid_idx + 104 :]
+            male_cols = df_mf.columns[male_start_idx : male_start_idx + 101]
+            female_cols = df_mf.columns[female_start_idx : female_start_idx + 101]
 
             # melt 및 병합
             male_df = df_mf[["지역"] + list(male_cols)].melt(id_vars="지역", var_name="연령", value_name="인구수")
