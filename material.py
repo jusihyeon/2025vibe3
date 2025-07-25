@@ -4,15 +4,16 @@ import plotly.express as px
 from pandas.errors import EmptyDataError
 
 st.set_page_config(page_title="광종별 매장량 시각화", layout="wide")
-st.title("⛏️ 광종별 및 국가별 매장량 분석 대시보드")
+st.title("⛏️ 광종별 및 국가별 매장량 분석 + 형법범죄 통계 대시보드")
 
 # ---------------- 파일 업로드 ----------------
 st.sidebar.header("📂 데이터 파일 업로드")
 uploaded_mineral = st.sidebar.file_uploader("광종별 매장량 (상위 5개국 기준)", type=["csv"], key="mineral")
 uploaded_country = st.sidebar.file_uploader("국가별 매장량 (전체 국가)", type=["csv"], key="country")
+uploaded_crime = st.sidebar.file_uploader("형법범죄 통계 엑셀 파일", type=["xlsx"], key="crime")
 
 # ---------------- TAB 설정 ----------------
-tabs = st.tabs(["📈 광종별 매장량", "🌍 국가별 매장량"])
+tabs = st.tabs(["📈 광종별 매장량", "🌍 국가별 매장량", "📉 형법범죄 통계"])
 
 # ---------------- TAB 1: 광종별 매장량 ----------------
 with tabs[0]:
@@ -95,12 +96,22 @@ with tabs[1]:
             except UnicodeDecodeError:
                 df2 = pd.read_csv(uploaded_country, encoding="cp949", sep=None, engine="python")
 
-            df2 = df2.dropna(how='all')  # 모든 값이 NaN인 행 제거
+            df2 = df2.dropna(how='all')
             df2.columns = df2.columns.str.strip()
 
-            # 필수 컬럼 확인
-            if '광종' not in df2.columns or '국가' not in df2.columns or '매장량' not in df2.columns:
-                st.warning("❗ 필요한 열(광종, 국가, 매장량)이 누락된 파일입니다.")
+            # ✅ 열 이름 매핑 처리
+            rename_map = {
+                "자원명": "광종",
+                "광종명": "광종",
+                "국가명": "국가",
+                "매장량(톤)": "매장량",
+            }
+            df2.rename(columns={k: v for k, v in rename_map.items() if k in df2.columns}, inplace=True)
+
+            df2.columns = df2.columns.str.strip()
+            required_cols = {"광종", "국가", "매장량"}
+            if not required_cols.issubset(set(df2.columns)):
+                st.warning(f"❗ 필요한 열 {required_cols}이(가) 누락된 파일입니다.")
                 st.stop()
 
             df2["매장량"] = pd.to_numeric(df2["매장량"].astype(str).str.replace(",", ""), errors="coerce")
@@ -129,3 +140,36 @@ with tabs[1]:
             st.exception(e)
     else:
         st.info("⬆️ 좌측에서 국가별 CSV 파일을 업로드하세요.")
+
+# ---------------- TAB 3: 형법범죄 통계 ----------------
+with tabs[2]:
+    st.header("📉 형법범죄 통계 시각화")
+    if uploaded_crime:
+        try:
+            df_crime_raw = pd.read_excel(uploaded_crime, sheet_name=0, header=None)
+
+            # 헤더 추정 및 컬럼 설정
+            df_crime_raw.columns.values[0:2] = ["범죄분류", "범죄유형"]
+            df_crime_raw.columns = df_crime_raw.columns.astype(str).str.strip()
+            df_crime_raw["범죄유형"] = df_crime_raw["범죄유형"].fillna(method="ffill")
+
+            df_crime = df_crime_raw.melt(id_vars=["범죄분류", "범죄유형"], var_name="연도", value_name="범죄율")
+            df_crime["연도"] = pd.to_numeric(df_crime["연도"], errors="coerce")
+            df_crime = df_crime.dropna(subset=["연도", "범죄율"])
+
+            df_crime["범죄율"] = pd.to_numeric(df_crime["범죄율"].astype(str).str.replace(",", "").replace("-", "0"), errors="coerce")
+
+            # 주요 형법범죄만 필터링
+            df_major = df_crime[df_crime["범죄분류"].str.contains("주요", na=False)]
+
+            st.subheader("📈 주요 형법범죄 연도별 추이")
+            fig = px.line(df_major, x="연도", y="범죄율", color="범죄유형", markers=True,
+                         title="📊 주요 형법범죄 범죄율 추세")
+            fig.update_layout(yaxis_title="범죄율 (인구 10만 명당)", xaxis_title="연도")
+            st.plotly_chart(fig, use_container_width=True)
+
+        except Exception as e:
+            st.error("❌ 오류 발생:")
+            st.exception(e)
+    else:
+        st.info("⬆️ 좌측에서 형법범죄 엑셀 파일을 업로드하세요.")
