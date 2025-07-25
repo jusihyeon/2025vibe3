@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from pandas.errors import EmptyDataError
 
 st.set_page_config(page_title="광종별 매장량 시각화", layout="wide")
 st.title("⛏️ 광종별 및 국가별 매장량 분석 대시보드")
@@ -94,21 +95,26 @@ with tabs[1]:
             except UnicodeDecodeError:
                 df2 = pd.read_csv(uploaded_country, encoding="cp949")
 
-            df2.columns = df2.columns.str.strip()
-            df2["매장량"] = pd.to_numeric(df2["매장량"].astype(str).str.replace(",", ""), errors="coerce")
-            st.subheader("📊 데이터 미리보기")
-            st.dataframe(df2)
+            if df2.empty or df2.shape[1] == 0:
+                st.warning("⚠️ 업로드된 파일에 유효한 데이터가 없습니다.")
+            else:
+                df2.columns = df2.columns.str.strip()
+                df2["매장량"] = pd.to_numeric(df2["매장량"].astype(str).str.replace(",", ""), errors="coerce")
+                st.subheader("📊 데이터 미리보기")
+                st.dataframe(df2)
 
-            selected_mineral = st.selectbox("🔍 광종 선택", df2["광종"].unique())
-            df_mineral = df2[df2["광종"] == selected_mineral].copy()
-            df_top10 = df_mineral.nlargest(10, "매장량")
+                selected_mineral = st.selectbox("🔍 광종 선택", df2["광종"].unique())
+                df_mineral = df2[df2["광종"] == selected_mineral].copy()
+                df_top10 = df_mineral.nlargest(10, "매장량")
 
-            fig2 = px.bar(df_top10, x="국가", y="매장량", color="국가",
-                          title=f"{selected_mineral} 자원 국가별 매장량 Top 10",
-                          labels={"매장량": "매장량", "국가": "국가"})
-            fig2.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig2, use_container_width=True)
+                fig2 = px.bar(df_top10, x="국가", y="매장량", color="국가",
+                              title=f"{selected_mineral} 자원 국가별 매장량 Top 10",
+                              labels={"매장량": "매장량", "국가": "국가"})
+                fig2.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig2, use_container_width=True)
 
+        except EmptyDataError:
+            st.error("❌ CSV 파일이 비어 있어 읽을 수 없습니다.")
         except Exception as e:
             st.error("❌ 오류 발생:")
             st.exception(e)
