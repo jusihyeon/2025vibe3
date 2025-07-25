@@ -2,71 +2,48 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 페이지 설정
-st.set_page_config(page_title="Seoul Age Population", page_icon="📊", layout="centered")
-st.title("📊 서울특별시 연령별 인구 시각화 (2025년 6월 기준)")
+# 페이지 제목
+st.title("서울특별시 연령별 인구수 (2025년 6월 기준) 시각화")
 
-# CSV 파일 경로
-csv_file = "translated_population_by_age_total.csv"
+# CSV 파일 업로드
+uploaded_file = st.file_uploader("CSV 파일을 업로드하세요 (예: 합계 인구)", type=["csv"])
 
-@st.cache_data
-def load_data():
-    return pd.read_csv(csv_file)
+if uploaded_file:
+    try:
+        # CSV 읽기
+        df = pd.read_csv(uploaded_file, encoding='cp949')
 
-# 데이터 로드
-try:
-    df_total = load_data()
-except FileNotFoundError:
-    st.error(f"❌ '{csv_file}' 파일이 존재하지 않습니다.")
-    st.stop()
+        # "서울특별시" 데이터 필터링
+        df_seoul = df[df["행정구역"].str.contains("서울특별시  ")].copy()
 
-# 서울특별시 데이터 필터링
-try:
-    seoul_row = df_total[df_total["Region"].str.contains("서울")].iloc[0]
-except IndexError:
-    st.error("❌ '서울' 데이터를 찾을 수 없습니다.")
-    st.stop()
+        # 연령 컬럼만 추출 (3번째 컬럼 이후)
+        age_columns = df_seoul.columns[3:]
 
-# 연령별 컬럼 추출
-age_columns = [col for col in seoul_row.index if "Age_" in col]
-if not age_columns:
-    st.error("❌ 연령 관련 컬럼(Age_)이 존재하지 않습니다.")
-    st.stop()
+        # Long-form으로 변환
+        df_plot = df_seoul.melt(id_vars=["행정구역"], value_vars=age_columns,
+                                var_name="연령", value_name="인구수")
 
-# 연령 라벨과 값 추출
-age_labels = [col.split("_")[-1].replace("plus", "100+") for col in age_columns]
-age_values = seoul_row[age_columns].astype(str).str.replace(",", "").astype(float)
+        # 연령 이름 정리 (숫자 추출)
+        df_plot["연령"] = df_plot["연령"].str.extract(r"(\d+세|100세 이상)")
 
-# 데이터프레임 구성
-df_plot = pd.DataFrame({
-    "Age": age_labels,
-    "Population": age_values
-})
+        # 쉼표 제거 → 숫자로 변환
+        df_plot["인구수"] = df_plot["인구수"].str.replace(",", "")
+        df_plot = df_plot.dropna(subset=["인구수"])
+        df_plot["인구수"] = df_plot["인구수"].astype(int)
 
-# 정렬을 위한 카테고리 설정
-age_order = [str(i) for i in range(101)] + ["100+"]
-df_plot["Age"] = pd.Categorical(df_plot["Age"], categories=age_order, ordered=True)
-df_plot = df_plot.sort_values("Age")
+        # Plotly 시각화
+        fig = px.bar(df_plot, x="연령", y="인구수",
+                     title="서울특별시 연령별 인구수 (2025년 6월)",
+                     labels={"연령": "연령대", "인구수": "인구 수"})
+        fig.update_layout(xaxis_tickangle=-45)
 
-# 타입 명확히 변환 (그래프 깨짐 방지)
-df_plot["Age"] = df_plot["Age"].astype(str)
-df_plot["Population"] = df_plot["Population"].astype(int)
+        st.plotly_chart(fig)
 
-# Plotly 그래프 그리기
-fig = px.bar(
-    df_plot,
-    x="Age",
-    y="Population",
-    title="Total Population by Age in Seoul (June 2025)",
-    labels={"Age": "Age", "Population": "Population"},
-    height=600
-)
+        # 데이터 테이블 표시
+        with st.expander("데이터 보기"):
+            st.dataframe(df_plot)
 
-fig.update_layout(xaxis_tickangle=-45)
-
-# Streamlit에 출력
-st.plotly_chart(fig, use_container_width=True)
-
-# 데이터프레임 원본 보기
-with st.expander("🔍 데이터프레임 보기"):
-    st.dataframe(df_plot, use_container_width=True)
+    except Exception as e:
+        st.error(f"오류 발생: {e}")
+else:
+    st.info("왼쪽 사이드바 또는 위에서 CSV 파일을 업로드하세요.")
