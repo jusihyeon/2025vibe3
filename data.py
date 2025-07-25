@@ -12,10 +12,7 @@ uploaded_mf = st.file_uploader("✅ 연령별 인구(남녀) CSV 업로드", typ
 # ✅ 연령 그룹 묶기 여부
 group_age = st.checkbox("🔢 연령대를 10세 단위로 묶어서 보기 (0–9세, 10–19세...)", value=False)
 
-# 📌 탭 구성
-tab1, tab2 = st.tabs(["📌 전체 인구 합계 분석", "📌 남녀 인구 비교 분석"])
-
-# 🔧 연령 그룹 변환 함수
+# 🔧 연령 그룹화 함수
 def group_age_range(age_str):
     if "이상" in age_str or "plus" in age_str:
         return "100+"
@@ -25,15 +22,20 @@ def group_age_range(age_str):
     age = int(digits)
     return f"{(age//10)*10}-{(age//10)*10 + 9}" if age < 100 else "100+"
 
+# ✅ 정렬 순서 명시
+age_order = [f"{i}-{i+9}" for i in range(0, 100, 10)] + ["100+"]
+
+# 📌 탭 구성
+tab1, tab2 = st.tabs(["📌 전체 인구 합계 분석", "📌 남녀 인구 비교 분석"])
+
 # -------------------------------------------------------------
-# 📊 TAB 1: 전체 인구 분석 (합계 파일 기반)
+# 📊 TAB 1: 전체 인구 분석
 # -------------------------------------------------------------
 with tab1:
     if uploaded_sum:
         try:
             df_total = pd.read_csv(uploaded_sum, encoding='cp949', engine='python')
             df_total = df_total.rename(columns={df_total.columns[0]: "지역"})
-
             if "총인구수" in df_total.columns[1]:
                 df_total = df_total.drop(columns=[df_total.columns[1]])
 
@@ -41,9 +43,9 @@ with tab1:
             df_long["인구수"] = df_long["인구수"].astype(str).str.replace(",", "").replace("", "0")
             df_long["인구수"] = pd.to_numeric(df_long["인구수"], errors="coerce").fillna(0).astype(int)
 
-            # 👉 연령 그룹화
             if group_age:
                 df_long["연령그룹"] = df_long["연령"].apply(group_age_range)
+                df_long["연령그룹"] = pd.Categorical(df_long["연령그룹"], categories=age_order, ordered=True)
                 df_plot = df_long.groupby(["지역", "연령그룹"], as_index=False)["인구수"].sum()
                 x_col = "연령그룹"
             else:
@@ -55,7 +57,8 @@ with tab1:
 
             fig = px.bar(filtered, x=x_col, y="인구수",
                          title=f"{selected_region} 연령별 전체 인구",
-                         labels={x_col: "연령", "인구수": "인구 수"})
+                         labels={x_col: "연령", "인구수": "인구 수"},
+                         category_orders={x_col: age_order} if group_age else None)
             fig.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
 
@@ -73,7 +76,6 @@ with tab2:
             df = pd.read_csv(uploaded_mf, encoding="cp949", engine="python", on_bad_lines="skip")
             df = df.rename(columns={df.columns[0]: "지역"})
 
-            # 열 자동 탐색
             try:
                 male_start_idx = next(i for i, col in enumerate(df.columns) if "남" in col and "0세" in col)
                 female_start_idx = next(i for i, col in enumerate(df.columns) if "여" in col and "0세" in col)
@@ -90,7 +92,6 @@ with tab2:
             female_df["성별"] = "여자"
 
             df_gender = pd.concat([male_df, female_df])
-
             df_gender["인구수"] = (
                 pd.to_numeric(df_gender["인구수"].astype(str)
                               .replace({",": "", "None": "0", "": "0"}, regex=True),
@@ -99,9 +100,9 @@ with tab2:
                 .astype(int)
             )
 
-            # 👉 연령 그룹화
             if group_age:
                 df_gender["연령그룹"] = df_gender["연령"].apply(group_age_range)
+                df_gender["연령그룹"] = pd.Categorical(df_gender["연령그룹"], categories=age_order, ordered=True)
                 df_plot = df_gender.groupby(["지역", "연령그룹", "성별"], as_index=False)["인구수"].sum()
                 x_col = "연령그룹"
             else:
@@ -113,7 +114,8 @@ with tab2:
 
             fig2 = px.bar(filtered_gender, x=x_col, y="인구수", color="성별", barmode="group",
                           title=f"{selected_region} 연령별 남녀 인구 비교",
-                          labels={x_col: "연령", "인구수": "인구 수"})
+                          labels={x_col: "연령", "인구수": "인구 수"},
+                          category_orders={x_col: age_order} if group_age else None)
             fig2.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig2, use_container_width=True)
 
