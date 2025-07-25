@@ -131,3 +131,119 @@ with tab2:
             st.exception(e)
     else:
         st.info("왼쪽에서 남녀 인구 CSV를 업로드하세요.")
+# -------------------------------------------------------------
+# 📊 TAB 3: 연령 피라미드 (합계 또는 남녀)
+# -------------------------------------------------------------
+tab3 = st.tabs(["🧍 연령 피라미드"])[0]
+
+with tab3:
+    pyramid_data_type = st.radio("🗂 사용할 데이터 선택", ["남녀 데이터", "합계 데이터"])
+
+    if pyramid_data_type == "남녀 데이터":
+        if uploaded_mf:
+            try:
+                df = pd.read_csv(uploaded_mf, encoding="cp949", engine="python", on_bad_lines="skip")
+                df = df.rename(columns={df.columns[0]: "지역"})
+
+                male_start_idx = next(i for i, col in enumerate(df.columns) if "남" in col and "0세" in col)
+                female_start_idx = next(i for i, col in enumerate(df.columns) if "여" in col and "0세" in col)
+
+                male_cols = df.columns[male_start_idx : male_start_idx + 101]
+                female_cols = df.columns[female_start_idx : female_start_idx + 101]
+
+                male_df = df[["지역"] + list(male_cols)].melt(id_vars="지역", var_name="연령", value_name="인구수")
+                male_df["성별"] = "남자"
+                female_df = df[["지역"] + list(female_cols)].melt(id_vars="지역", var_name="연령", value_name="인구수")
+                female_df["성별"] = "여자"
+
+                df_gender = pd.concat([male_df, female_df])
+                df_gender["인구수"] = (
+                    pd.to_numeric(df_gender["인구수"].astype(str)
+                                  .replace({",": "", "None": "0", "": "0"}, regex=True),
+                                  errors="coerce")
+                    .fillna(0)
+                    .astype(int)
+                )
+
+                if group_age:
+                    df_gender["연령그룹"] = df_gender["연령"].apply(group_age_range)
+                    df_gender["연령그룹"] = pd.Categorical(df_gender["연령그룹"], categories=age_order, ordered=True)
+                    df_plot = df_gender.groupby(["지역", "연령그룹", "성별"], as_index=False)["인구수"].sum()
+                    x_col = "연령그룹"
+                else:
+                    df_plot = df_gender
+                    x_col = "연령"
+
+                selected_region = st.selectbox("지역 선택 (남녀)", sorted(df_plot["지역"].unique()), key="pyramid_mf")
+                pyramid_data = df_plot[df_plot["지역"] == selected_region].copy()
+
+                pyramid_data["표시인구"] = pyramid_data.apply(
+                    lambda row: -row["인구수"] if row["성별"] == "남자" else row["인구수"],
+                    axis=1
+                )
+
+                fig_pyramid = px.bar(pyramid_data,
+                                     y=x_col,
+                                     x="표시인구",
+                                     color="성별",
+                                     orientation="h",
+                                     title=f"{selected_region} 연령 피라미드 (남녀 데이터)",
+                                     labels={"표시인구": "인구 수", x_col: "연령"},
+                                     category_orders={x_col: age_order} if group_age else None)
+
+                fig_pyramid.update_layout(barmode="relative", xaxis_title="인구 수", yaxis_title="연령")
+                st.plotly_chart(fig_pyramid, use_container_width=True)
+
+            except Exception as e:
+                st.exception(e)
+        else:
+            st.info("💡 남녀 인구 CSV를 업로드해주세요.")
+
+    else:  # 합계 데이터로 피라미드
+        if uploaded_sum:
+            try:
+                df_total = pd.read_csv(uploaded_sum, encoding="cp949", engine="python")
+                df_total = df_total.rename(columns={df_total.columns[0]: "지역"})
+                if "총인구수" in df_total.columns[1]:
+                    df_total = df_total.drop(columns=[df_total.columns[1]])
+
+                df_long = df_total.melt(id_vars="지역", var_name="연령", value_name="인구수")
+                df_long["인구수"] = df_long["인구수"].astype(str).str.replace(",", "").replace("", "0")
+                df_long["인구수"] = pd.to_numeric(df_long["인구수"], errors="coerce").fillna(0).astype(int)
+
+                if group_age:
+                    df_long["연령그룹"] = df_long["연령"].apply(group_age_range)
+                    df_long["연령그룹"] = pd.Categorical(df_long["연령그룹"], categories=age_order, ordered=True)
+                    df_plot = df_long.groupby(["지역", "연령그룹"], as_index=False)["인구수"].sum()
+                    df_plot = pd.concat([
+                        df_plot.assign(성별="남자", 표시인구=lambda d: -d["인구수"] // 2),
+                        df_plot.assign(성별="여자", 표시인구=lambda d: d["인구수"] // 2),
+                    ])
+                    x_col = "연령그룹"
+                else:
+                    df_plot = df_long
+                    df_plot = pd.concat([
+                        df_plot.assign(성별="남자", 표시인구=lambda d: -d["인구수"] // 2),
+                        df_plot.assign(성별="여자", 표시인구=lambda d: d["인구수"] // 2),
+                    ])
+                    x_col = "연령"
+
+                selected_region = st.selectbox("지역 선택 (합계)", sorted(df_plot["지역"].unique()), key="pyramid_sum")
+                pyramid_data = df_plot[df_plot["지역"] == selected_region]
+
+                fig_pyramid = px.bar(pyramid_data,
+                                     y=x_col,
+                                     x="표시인구",
+                                     color="성별",
+                                     orientation="h",
+                                     title=f"{selected_region} 연령 피라미드 (합계 기반)",
+                                     labels={"표시인구": "인구 수", x_col: "연령"},
+                                     category_orders={x_col: age_order} if group_age else None)
+
+                fig_pyramid.update_layout(barmode="relative", xaxis_title="인구 수", yaxis_title="연령")
+                st.plotly_chart(fig_pyramid, use_container_width=True)
+
+            except Exception as e:
+                st.exception(e)
+        else:
+            st.info("💡 연령별 인구(합계) CSV를 업로드해주세요.")
