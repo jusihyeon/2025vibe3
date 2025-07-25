@@ -38,15 +38,29 @@ if uploaded_file:
         st.subheader("📈 광종별 매장량 시각화 (막대그래프)")
         orientation = st.radio("그래프 방향 선택", ["세로 막대", "가로 막대"])
 
+        # ▶️ 선택 필터: 상위/하위/전체 선택
+        filter_option = st.selectbox("🔍 표시할 데이터 범위 선택", ["전체 보기", "상위 5개만", "하위 5개만", "직접 선택"])
+
+        if filter_option == "상위 5개만":
+            df_vis = df.nlargest(5, "상위5개국 매장량 합계")
+        elif filter_option == "하위 5개만":
+            df_vis = df.nsmallest(5, "상위5개국 매장량 합계")
+        elif filter_option == "직접 선택":
+            selected_items = st.multiselect("광종 선택", df["광종"].unique())
+            df_vis = df[df["광종"].isin(selected_items)]
+        else:
+            df_vis = df.copy()
+
+        # ▶️ 그래프 그리기
         if orientation == "세로 막대":
-            fig = px.bar(df, x="광종", y="상위5개국 매장량 합계", color="단위",
-                         title="광종별 상위 5개국 매장량 합계 (2017)",
+            fig = px.bar(df_vis, x="광종", y="상위5개국 매장량 합계", color="단위",
+                         title="광종별 상위 5개국 매장량 합계 (확대 보기)",
                          labels={"상위5개국 매장량 합계": "매장량", "광종": "광물 종류"})
             fig.update_layout(xaxis_tickangle=-45, margin=dict(b=120))
         else:
-            fig = px.bar(df, y="광종", x="상위5개국 매장량 합계", color="단위",
+            fig = px.bar(df_vis, y="광종", x="상위5개국 매장량 합계", color="단위",
                          orientation="h",
-                         title="광종별 상위 5개국 매장량 합계 (2017)",
+                         title="광종별 상위 5개국 매장량 합계 (확대 보기)",
                          labels={"상위5개국 매장량 합계": "매장량", "광종": "광물 종류"})
             fig.update_layout(margin=dict(l=200))
 
