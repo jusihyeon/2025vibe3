@@ -9,8 +9,21 @@ st.title("📊 2025년 6월 연령별 인구 분석")
 uploaded_sum = st.file_uploader("✅ 연령별 인구(합계) CSV 업로드", type=["csv"], key="sum")
 uploaded_mf = st.file_uploader("✅ 연령별 인구(남녀) CSV 업로드", type=["csv"], key="mf")
 
+# ✅ 연령 그룹 묶기 여부
+group_age = st.checkbox("🔢 연령대를 10세 단위로 묶어서 보기 (0–9세, 10–19세...)", value=False)
+
 # 📌 탭 구성
 tab1, tab2 = st.tabs(["📌 전체 인구 합계 분석", "📌 남녀 인구 비교 분석"])
+
+# 🔧 연령 그룹 변환 함수
+def group_age_range(age_str):
+    if "이상" in age_str or "plus" in age_str:
+        return "100+"
+    digits = ''.join(filter(str.isdigit, age_str))
+    if digits == '':
+        return "Unknown"
+    age = int(digits)
+    return f"{(age//10)*10}-{(age//10)*10 + 9}" if age < 100 else "100+"
 
 # -------------------------------------------------------------
 # 📊 TAB 1: 전체 인구 분석 (합계 파일 기반)
@@ -21,23 +34,28 @@ with tab1:
             df_total = pd.read_csv(uploaded_sum, encoding='cp949', engine='python')
             df_total = df_total.rename(columns={df_total.columns[0]: "지역"})
 
-            # 총인구수 제거 (2번째 열이 총합인 경우)
             if "총인구수" in df_total.columns[1]:
                 df_total = df_total.drop(columns=[df_total.columns[1]])
 
-            # 긴 형식 변환
             df_long = df_total.melt(id_vars="지역", var_name="연령", value_name="인구수")
             df_long["인구수"] = df_long["인구수"].astype(str).str.replace(",", "").replace("", "0")
             df_long["인구수"] = pd.to_numeric(df_long["인구수"], errors="coerce").fillna(0).astype(int)
 
-            # 지역 선택
-            selected_region = st.selectbox("지역 선택 (합계)", sorted(df_long["지역"].unique()), key="sum_region")
-            filtered = df_long[df_long["지역"] == selected_region]
+            # 👉 연령 그룹화
+            if group_age:
+                df_long["연령그룹"] = df_long["연령"].apply(group_age_range)
+                df_plot = df_long.groupby(["지역", "연령그룹"], as_index=False)["인구수"].sum()
+                x_col = "연령그룹"
+            else:
+                df_plot = df_long
+                x_col = "연령"
 
-            # 시각화
-            fig = px.bar(filtered, x="연령", y="인구수",
+            selected_region = st.selectbox("지역 선택 (합계)", sorted(df_plot["지역"].unique()), key="sum_region")
+            filtered = df_plot[df_plot["지역"] == selected_region]
+
+            fig = px.bar(filtered, x=x_col, y="인구수",
                          title=f"{selected_region} 연령별 전체 인구",
-                         labels={"연령": "나이", "인구수": "인구 수"})
+                         labels={x_col: "연령", "인구수": "인구 수"})
             fig.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig, use_container_width=True)
 
@@ -73,7 +91,6 @@ with tab2:
 
             df_gender = pd.concat([male_df, female_df])
 
-            # 인구수 정리
             df_gender["인구수"] = (
                 pd.to_numeric(df_gender["인구수"].astype(str)
                               .replace({",": "", "None": "0", "": "0"}, regex=True),
@@ -82,14 +99,21 @@ with tab2:
                 .astype(int)
             )
 
-            # 지역 선택
-            selected_region = st.selectbox("지역 선택 (남녀비교)", sorted(df_gender["지역"].unique()), key="mf_region")
-            filtered_gender = df_gender[df_gender["지역"] == selected_region]
+            # 👉 연령 그룹화
+            if group_age:
+                df_gender["연령그룹"] = df_gender["연령"].apply(group_age_range)
+                df_plot = df_gender.groupby(["지역", "연령그룹", "성별"], as_index=False)["인구수"].sum()
+                x_col = "연령그룹"
+            else:
+                df_plot = df_gender
+                x_col = "연령"
 
-            # 시각화
-            fig2 = px.bar(filtered_gender, x="연령", y="인구수", color="성별", barmode="group",
+            selected_region = st.selectbox("지역 선택 (남녀비교)", sorted(df_plot["지역"].unique()), key="mf_region")
+            filtered_gender = df_plot[df_plot["지역"] == selected_region]
+
+            fig2 = px.bar(filtered_gender, x=x_col, y="인구수", color="성별", barmode="group",
                           title=f"{selected_region} 연령별 남녀 인구 비교",
-                          labels={"연령": "나이", "인구수": "인구 수"})
+                          labels={x_col: "연령", "인구수": "인구 수"})
             fig2.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig2, use_container_width=True)
 
