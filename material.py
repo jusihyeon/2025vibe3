@@ -71,6 +71,20 @@ if uploaded_file:
 
         st.plotly_chart(fig, use_container_width=True)
 
+        # ▶️ 선택한 광종 상세 정보 표시
+        st.subheader("🔎 선택한 광물의 상세 매장량 보기")
+        selected_mineral = st.selectbox("광종 선택", df_vis["광종"].unique())
+        selected_row = df_vis[df_vis["광종"] == selected_mineral]
+
+        if not selected_row.empty:
+            st.markdown(f"""
+            **📌 {selected_mineral} 매장량 상세 정보**
+
+            - 매장량 합계: `{selected_row['상위5개국 매장량 합계'].values[0]:,}` {selected_row['단위'].values[0]}
+            """)
+        else:
+            st.warning("선택한 광종의 데이터를 찾을 수 없습니다.")
+
     except Exception as e:
         st.error("❌ 오류 발생:")
         st.exception(e)
