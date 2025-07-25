@@ -51,16 +51,27 @@ with tab2:
             df_mf = pd.read_csv(uploaded_mf, encoding="ISO-8859-1", engine="python", on_bad_lines='skip')
             df_mf = df_mf.rename(columns={df_mf.columns[0]: "지역"})
 
-            # 🔎 디버깅: 전체 컬럼 출력
-            st.write("📌 전체 컬럼명:", df_mf.columns.tolist())
+            # 🔎 디버깅용 전체 컬럼 확인
+            st.write("📌 전체 컬럼명 미리보기:", df_mf.columns.tolist())
 
-            # "남_0세", "여_0세" 열 자동 탐색
-            male_start_idx = next(i for i, col in enumerate(df_mf.columns) if "남_0세" in col)
-            female_start_idx = next(i for i, col in enumerate(df_mf.columns) if "여_0세" in col)
+            # 🔍 '남' + '0세', '여' + '0세'가 포함된 열의 시작 인덱스 찾기
+            try:
+                male_start_idx = next(i for i, col in enumerate(df_mf.columns) if "남" in col and "0세" in col)
+            except StopIteration:
+                st.error("❌ '남_0세' 관련 열을 찾을 수 없습니다. CSV 헤더를 확인해주세요.")
+                st.stop()
 
+            try:
+                female_start_idx = next(i for i, col in enumerate(df_mf.columns) if "여" in col and "0세" in col)
+            except StopIteration:
+                st.error("❌ '여_0세' 관련 열을 찾을 수 없습니다. CSV 헤더를 확인해주세요.")
+                st.stop()
+
+            # 각각 101개씩 열 추출
             male_cols = df_mf.columns[male_start_idx : male_start_idx + 101]
             female_cols = df_mf.columns[female_start_idx : female_start_idx + 101]
 
+            # 데이터 정리
             male_df = df_mf[["지역"] + list(male_cols)].melt(id_vars="지역", var_name="연령", value_name="인구수")
             male_df["성별"] = "남자"
 
@@ -69,21 +80,20 @@ with tab2:
 
             df_gender = pd.concat([male_df, female_df])
 
-            # 🔧 인구수 정리
             df_gender["인구수"] = df_gender["인구수"].astype(str).str.replace(",", "").replace("", "0")
             df_gender["인구수"] = df_gender["인구수"].fillna(0).astype(int)
 
-            # 🔎 디버깅: 일부 출력
-            st.write("👀 성별 데이터 샘플:", df_gender.head())
+            # 🔍 디버깅용 출력
+            st.write("👀 성별 인구 데이터 샘플:", df_gender.head())
 
             regions = df_gender["지역"].unique()
             selected_region = st.selectbox("지역 선택 (남녀비교)", regions, key="mf_region")
 
             filtered_gender = df_gender[df_gender["지역"] == selected_region]
-            st.write("📊 선택된 지역 데이터:", filtered_gender.head())
+            st.write("📊 선택한 지역의 남녀 인구 데이터:", filtered_gender.head())
 
             if filtered_gender.empty:
-                st.warning("⚠ 선택한 지역에 대한 남녀 데이터가 없습니다.")
+                st.warning("⚠ 선택한 지역의 데이터가 없습니다.")
             else:
                 fig2 = px.bar(filtered_gender, x="연령", y="인구수", color="성별", barmode="group",
                               title=f"{selected_region} 연령별 남녀 인구 비교")
