@@ -4,20 +4,25 @@ import plotly.express as px
 import re
 
 st.set_page_config(page_title="2025년 인구 분석", layout="wide")
-st.title("\U0001F4CA 2025년 6월 연령별 인구 분석")
+st.title("📊 2025년 6월 연령별 인구 분석")
 
-# 파일 업로드
+# 📁 파일 업로드
 uploaded_sum = st.file_uploader("✅ 연령별 인구(합계) CSV 업로드", type=["csv"], key="sum")
 uploaded_mf = st.file_uploader("✅ 연령별 인구(남녀) CSV 업로드", type=["csv"], key="mf")
 
-# 연령 그룹 문자법
+# ✅ 연령 그룹 묶기 여부
+group_age = st.checkbox("🔢 연령대를 10세 단위로 묶어서 보기 (0–9세, 10–19세...)", value=False)
 
+# 🔧 연령 그룹화 함수 (정규표현식 기반)
 def group_age_range(age_str):
     if pd.isna(age_str):
         return "Unknown"
+    
     age_str = str(age_str)
     if "이상" in age_str or "plus" in age_str or "100" in age_str:
         return "100+"
+    
+    # 정규식: "0세", "45세", "2025년06월_계_0세" 등에서 숫자 추출
     match = re.search(r"(\d{1,3})세", age_str)
     if match:
         age = int(match.group(1))
@@ -25,11 +30,15 @@ def group_age_range(age_str):
     else:
         return "Unknown"
 
+# ✅ 정렬 순서 명시
 age_order = [f"{i}-{i+9}" for i in range(0, 100, 10)] + ["100+"]
-group_age = st.checkbox("🔢 연령대를 10세 단위로 묶어서 보기 (0–9세, 10–19세...)", value=False)
 
-tab1, tab2, tab3 = st.tabs(["\ud83d\udccc 전체 인구 합계 분석", "\ud83d\udccc 남녀 비교 분석", "🣍 연령 피래미드"])
+# 📌 탭 구성
+tab1, tab2 = st.tabs(["📌 전체 인구 합계 분석", "📌 남녀 인구 비교 분석"])
 
+# -------------------------------------------------------------
+# 📊 TAB 1: 전체 인구 분석
+# -------------------------------------------------------------
 with tab1:
     if uploaded_sum:
         try:
@@ -43,10 +52,10 @@ with tab1:
             df_long["인구수"] = pd.to_numeric(df_long["인구수"], errors="coerce").fillna(0).astype(int)
 
             if group_age:
-                df_long["연령기"] = df_long["연령"].apply(group_age_range)
-                df_long["연령기"] = pd.Categorical(df_long["연령기"], categories=age_order, ordered=True)
-                df_plot = df_long.groupby(["지역", "연령기"], as_index=False)["인구수"].sum()
-                x_col = "연령기"
+                df_long["연령그룹"] = df_long["연령"].apply(group_age_range)
+                df_long["연령그룹"] = pd.Categorical(df_long["연령그룹"], categories=age_order, ordered=True)
+                df_plot = df_long.groupby(["지역", "연령그룹"], as_index=False)["인구수"].sum()
+                x_col = "연령그룹"
             else:
                 df_plot = df_long
                 x_col = "연령"
@@ -66,14 +75,21 @@ with tab1:
     else:
         st.info("왼쪽에서 연령별 인구 합계 CSV를 업로드하세요.")
 
+# -------------------------------------------------------------
+# 📊 TAB 2: 남녀 인구 비교 분석
+# -------------------------------------------------------------
 with tab2:
     if uploaded_mf:
         try:
             df = pd.read_csv(uploaded_mf, encoding="cp949", engine="python", on_bad_lines="skip")
             df = df.rename(columns={df.columns[0]: "지역"})
 
-            male_start_idx = next(i for i, col in enumerate(df.columns) if "남" in col and "0세" in col)
-            female_start_idx = next(i for i, col in enumerate(df.columns) if "여" in col and "0세" in col)
+            try:
+                male_start_idx = next(i for i, col in enumerate(df.columns) if "남" in col and "0세" in col)
+                female_start_idx = next(i for i, col in enumerate(df.columns) if "여" in col and "0세" in col)
+            except StopIteration:
+                st.error("❌ '남_0세' 또는 '여_0세' 열을 찾을 수 없습니다. CSV 구조를 확인하세요.")
+                st.stop()
 
             male_cols = df.columns[male_start_idx : male_start_idx + 101]
             female_cols = df.columns[female_start_idx : female_start_idx + 101]
@@ -84,7 +100,13 @@ with tab2:
             female_df["성별"] = "여자"
 
             df_gender = pd.concat([male_df, female_df])
-            df_gender["인구수"] = pd.to_numeric(df_gender["인구수"].astype(str).replace({",": "", "None": "0", "": "0"}, regex=True), errors="coerce").fillna(0).astype(int)
+            df_gender["인구수"] = (
+                pd.to_numeric(df_gender["인구수"].astype(str)
+                              .replace({",": "", "None": "0", "": "0"}, regex=True),
+                              errors="coerce")
+                .fillna(0)
+                .astype(int)
+            )
 
             if group_age:
                 df_gender["연령그룹"] = df_gender["연령"].apply(group_age_range)
@@ -109,6 +131,3 @@ with tab2:
             st.exception(e)
     else:
         st.info("왼쪽에서 남녀 인구 CSV를 업로드하세요.")
-
-# 피래미드 첫과추가의 탭은 기존 코드에 입력되어야 합니다.
-# 위의 탭3 = tab3에 복사하여 추가해주세요!
