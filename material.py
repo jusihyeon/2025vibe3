@@ -51,6 +51,11 @@ if uploaded_file:
         else:
             df_vis = df.copy()
 
+        # ▶️ 정렬 옵션 추가
+        sort_order = st.radio("정렬 순서 선택", ["매장량 높은 순", "매장량 낮은 순"])
+        ascending = True if sort_order == "매장량 낮은 순" else False
+        df_vis = df_vis.sort_values("상위5개국 매장량 합계", ascending=ascending)
+
         # ▶️ 그래프 그리기
         if orientation == "세로 막대":
             fig = px.bar(df_vis, x="광종", y="상위5개국 매장량 합계", color="단위",
