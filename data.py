@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import re
 
 st.set_page_config(page_title="2025년 인구 분석", layout="wide")
 st.title("📊 2025년 6월 연령별 인구 분석")
@@ -12,15 +13,22 @@ uploaded_mf = st.file_uploader("✅ 연령별 인구(남녀) CSV 업로드", typ
 # ✅ 연령 그룹 묶기 여부
 group_age = st.checkbox("🔢 연령대를 10세 단위로 묶어서 보기 (0–9세, 10–19세...)", value=False)
 
-# 🔧 연령 그룹화 함수
+# 🔧 연령 그룹화 함수 (정규표현식 기반)
 def group_age_range(age_str):
-    if "이상" in age_str or "plus" in age_str:
-        return "100+"
-    digits = ''.join(filter(str.isdigit, age_str))
-    if digits == '':
+    if pd.isna(age_str):
         return "Unknown"
-    age = int(digits)
-    return f"{(age//10)*10}-{(age//10)*10 + 9}" if age < 100 else "100+"
+    
+    age_str = str(age_str)
+    if "이상" in age_str or "plus" in age_str or "100" in age_str:
+        return "100+"
+    
+    # 정규식: "0세", "45세", "2025년06월_계_0세" 등에서 숫자 추출
+    match = re.search(r"(\d{1,3})세", age_str)
+    if match:
+        age = int(match.group(1))
+        return f"{(age // 10) * 10}-{(age // 10) * 10 + 9}" if age < 100 else "100+"
+    else:
+        return "Unknown"
 
 # ✅ 정렬 순서 명시
 age_order = [f"{i}-{i+9}" for i in range(0, 100, 10)] + ["100+"]
